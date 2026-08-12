@@ -1,21 +1,14 @@
 /* ========================================
-   Universal ID - 零食铺子（客户端）
+   Universal ID（客户端）
    后端版：API + WebSocket 实时同步
    ======================================== */
 
-/* ---- 服务器地址（改成你的服务器IP） ---- */
-const API_BASE = 'http://43.139.32.212:3210/api/uid';
-const WS_URL = 'ws://43.139.32.212:3210/ws';
+/* ---- 服务器地址（前端由同一服务器托管，使用相对路径） ---- */
+const API_BASE = '/api/uid';
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
 
-/* ---- 分类映射 ---- */
-const CATEGORY_NAMES = {
-  'All': '全部',
-  'Chips': '薯片',
-  'Choco': '巧克力',
-  'Drinks': '饮料',
-  'Cookies': '饼干',
-  'Nuts': '坚果',
-};
+/* ---- 分类（从服务器动态加载） ---- */
+let categories = [];
 
 /* ---- 状态 ---- */
 let products = [];
@@ -125,6 +118,7 @@ function handleWSMessage(msg) {
 /* ---- DOM 引用 ---- */
 const app = document.getElementById('app');
 const productGrid = document.getElementById('product-grid');
+const filterRow = document.querySelector('.filter-row');
 const emptyState = document.getElementById('empty-state');
 const itemCount = document.getElementById('item-count');
 const collectionTitle = document.getElementById('collection-title');
@@ -194,7 +188,7 @@ function renderProductGrid() {
   itemCount.textContent = `${filtered.length} 件`;
   collectionTitle.textContent = currentFilter === 'All'
     ? '全部商品'
-    : `${CATEGORY_NAMES[currentFilter] || currentFilter}商品`;
+    : `${currentFilter}商品`;
 
   if (filtered.length === 0) {
     productGrid.style.display = 'none';
@@ -251,7 +245,7 @@ function openDetail(id) {
       <div class="detail-tag">✓</div>
     </div>
     <div class="detail-info">
-      <span class="detail-info-pill">${CATEGORY_NAMES[product.cat] || '零食'}</span>
+      <span class="detail-info-pill">${product.cat || '商品'}</span>
       <span class="detail-info-pill">优选</span>
       <span class="detail-info-pill">天然</span>
     </div>
@@ -466,7 +460,7 @@ function renderCartBody() {
     cartBody.innerHTML = `
       <div style="text-align:center;padding:60px 0;color:#666">
         <p style="font-size:16px;font-weight:600;color:#fff">购物车是空的</p>
-        <p style="font-size:13px;color:#888;margin-top:8px">去挑选些零食吧！</p>
+        <p style="font-size:13px;color:#888;margin-top:8px">去挑选商品吧！</p>
       </div>
     `;
     return;
@@ -558,15 +552,41 @@ function showPage(target) {
 }
 
 /* ========================================
-   筛选
+   筛选（动态分类 + 事件委托）
    ======================================== */
-document.querySelectorAll('.filter-pill').forEach(pill => {
-  pill.addEventListener('click', function() {
-    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-    this.classList.add('active');
-    currentFilter = this.dataset.cat || 'All';
-    renderProductGrid();
+async function loadCategories() {
+  const data = await api('/categories');
+  if (data && Array.isArray(data)) {
+    categories = data
+      .map(c => (typeof c === 'string' ? c : (c.name || c.key || '')))
+      .filter(Boolean);
+    renderFilters();
+    renderCategorySelect();
+  }
+}
+
+function renderFilters() {
+  let html = `<button class="filter-pill${currentFilter === 'All' ? ' active' : ''}" data-cat="All">全部</button>`;
+  categories.forEach(name => {
+    html += `<button class="filter-pill${currentFilter === name ? ' active' : ''}" data-cat="${name}">${name}</button>`;
   });
+  html += `<button class="filter-icon">🔍</button><button class="filter-icon">✦</button>`;
+  filterRow.innerHTML = html;
+}
+
+function renderCategorySelect() {
+  formCategory.innerHTML = categories
+    .map(name => `<option value="${name}">${name}</option>`)
+    .join('');
+}
+
+filterRow.addEventListener('click', function(e) {
+  const pill = e.target.closest('.filter-pill');
+  if (!pill) return;
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  currentFilter = pill.dataset.cat || 'All';
+  renderProductGrid();
 });
 
 /* ========================================
@@ -636,7 +656,7 @@ function showAddForm() {
   formBrand.value = '';
   formPrice.value = '';
   formStock.value = '';
-  formCategory.value = 'Chips';
+  formCategory.value = categories[0] || '';
   uploadPreview.style.display = 'none';
   uploadPlaceholder.style.display = 'flex';
   document.querySelectorAll('.color-option').forEach(opt => {
@@ -659,7 +679,7 @@ function editProduct(id) {
   formBrand.value = product.brand || '';
   formPrice.value = product.price || '';
   formStock.value = product.stock !== undefined ? product.stock : '';
-  formCategory.value = product.cat || 'Chips';
+  formCategory.value = product.cat || categories[0] || '';
 
   if (product.image) {
     uploadPreview.src = product.image;
@@ -792,6 +812,7 @@ function showToast(message) {
    初始化
    ======================================== */
 loadCart();
+loadCategories();
 renderProductGrid();
 updateCartBar();
 loadProducts();
