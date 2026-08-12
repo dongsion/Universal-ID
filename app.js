@@ -1,18 +1,28 @@
 /* ========================================
-   Universal ID - Snacks Store
+   Universal ID - 零食铺子
    完整版：含商品管理（增删改查）+ 库存管理 + localStorage 持久化
    ======================================== */
 
+/* ---- 分类映射 ---- */
+const CATEGORY_NAMES = {
+  'All': '全部',
+  'Chips': '薯片',
+  'Choco': '巧克力',
+  'Drinks': '饮料',
+  'Cookies': '饼干',
+  'Nuts': '坚果',
+};
+
 /* ---- 默认商品数据 ---- */
 const DEFAULT_PRODUCTS = [
-  { id: 1, name: 'Smiths Chips',   brand: 'Smiths',      price: 7,  stock: 50,  bg: '#FFF3D6', bagBg: '#E8650C', bagText: 'SMITHS',     bagSub: 'Original',    cat: 'Chips',  image: null },
-  { id: 2, name: 'Coconut Chips',  brand: 'Dang',        price: 6,  stock: 80,  bg: '#D6F5E0', bagBg: '#1A8A4E', bagText: 'dang',        bagSub: 'Coconut',     cat: 'Chips',  image: null },
-  { id: 3, name: 'Dark Russet',    brand: 'Idaho',       price: 8,  stock: 30,  bg: '#F5D6E0', bagBg: '#2A2A2A', bagText: 'IDAHO',       bagSub: 'Dark Russet', cat: 'Chips',  image: null },
-  { id: 4, name: 'Regular Nature', brand: 'Ruffles',     price: 8,  stock: 60,  bg: '#D6E8F5', bagBg: '#1A5B9E', bagText: 'RUFFLES',     bagSub: 'Original',    cat: 'Chips',  image: null },
-  { id: 5, name: 'Twister Chips',  brand: 'Twistos',     price: 6,  stock: 0,   bg: '#F5D6D6', bagBg: '#C01A1A', bagText: 'TWISTOS',     bagSub: 'BBQ',         cat: 'Chips',  image: null },
-  { id: 6, name: 'Deep River',     brand: 'Deep River',  price: 9,  stock: 25,  bg: '#E0D6F5', bagBg: '#5B1A8A', bagText: 'DEEP RIVER',  bagSub: 'Sea Salt',    cat: 'Chips',  image: null },
-  { id: 7, name: 'Unreal Muffins', brand: 'Unreal',      price: 6,  stock: 40,  bg: '#D6F5E8', bagBg: '#1A8A6E', bagText: 'UNREAL',      bagSub: 'Cocoa',       cat: 'Choco',  image: null },
-  { id: 8, name: 'Perfect Snacks', brand: 'Perfect',     price: 8,  stock: 35,  bg: '#F5E8D6', bagBg: '#5B3A1A', bagText: 'PERFECT',     bagSub: 'Dark Choc',   cat: 'Choco',  image: null },
+  { id: 1, name: '史密斯薯片',     brand: 'Smiths',      price: 7,  stock: 50,  bg: '#FFF3D6', bagBg: '#E8650C', bagText: 'SMITHS',     bagSub: '原味',     cat: 'Chips',  image: null },
+  { id: 2, name: '椰子脆片',       brand: 'Dang',        price: 6,  stock: 80,  bg: '#D6F5E0', bagBg: '#1A8A4E', bagText: 'dang',        bagSub: '椰子味',   cat: 'Chips',  image: null },
+  { id: 3, name: '黑金薯片',       brand: 'Idaho',       price: 8,  stock: 30,  bg: '#F5D6E0', bagBg: '#2A2A2A', bagText: 'IDAHO',       bagSub: '黑椒味',   cat: 'Chips',  image: null },
+  { id: 4, name: '天然波浪薯片',   brand: 'Ruffles',     price: 8,  stock: 60,  bg: '#D6E8F5', bagBg: '#1A5B9E', bagText: 'RUFFLES',     bagSub: '原味',     cat: 'Chips',  image: null },
+  { id: 5, name: '卷卷薯片',       brand: 'Twistos',     price: 6,  stock: 0,   bg: '#F5D6D6', bagBg: '#C01A1A', bagText: 'TWISTOS',     bagSub: '烧烤味',   cat: 'Chips',  image: null },
+  { id: 6, name: '深河海盐薯片',   brand: 'Deep River',  price: 9,  stock: 25,  bg: '#E0D6F5', bagBg: '#5B1A8A', bagText: 'DEEP RIVER',  bagSub: '海盐味',   cat: 'Chips',  image: null },
+  { id: 7, name: '梦境松露',       brand: 'Unreal',      price: 6,  stock: 40,  bg: '#D6F5E8', bagBg: '#1A8A6E', bagText: 'UNREAL',      bagSub: '可可味',   cat: 'Choco',  image: null },
+  { id: 8, name: '完美零食',       brand: 'Perfect',     price: 8,  stock: 35,  bg: '#F5E8D6', bagBg: '#5B3A1A', bagText: 'PERFECT',     bagSub: '黑巧味',   cat: 'Choco',  image: null },
 ];
 
 /* ---- 状态 ---- */
@@ -135,10 +145,10 @@ function renderProductGrid() {
     ? products
     : products.filter(p => p.cat === currentFilter);
 
-  itemCount.textContent = `${filtered.length} items`;
+  itemCount.textContent = `${filtered.length} 件`;
   collectionTitle.textContent = currentFilter === 'All'
-    ? 'All Collections'
-    : `${currentFilter} Collections`;
+    ? '全部商品'
+    : `${CATEGORY_NAMES[currentFilter] || currentFilter}商品`;
 
   if (filtered.length === 0) {
     productGrid.style.display = 'none';
@@ -155,8 +165,8 @@ function renderProductGrid() {
     return `
       <div class="product-card ${soldOut ? 'sold-out' : ''}" data-id="${p.id}" onclick="openDetail(${p.id})">
         <div class="card-bg" style="background:${p.bg || '#f0f0f3'}"></div>
-        ${soldOut ? '<div class="sold-out-tag">SOLD OUT</div>' : ''}
-        ${!soldOut ? `<div class="card-stock ${lowStock ? 'low' : ''}">${p.stock} left</div>` : ''}
+        ${soldOut ? '<div class="sold-out-tag">已售罄</div>' : ''}
+        ${!soldOut ? `<div class="card-stock ${lowStock ? 'low' : ''}">余 ${p.stock}</div>` : ''}
         <span class="product-name">${p.name}</span>
         <div class="product-image">${productImageHTML(p)}</div>
         <div class="card-bottom">
@@ -195,13 +205,13 @@ function openDetail(id) {
       <div class="detail-tag">✓</div>
     </div>
     <div class="detail-info">
-      <span class="detail-info-pill">${product.cat || 'Snacks'}</span>
-      <span class="detail-info-pill">Premium</span>
-      <span class="detail-info-pill">Natural</span>
+      <span class="detail-info-pill">${CATEGORY_NAMES[product.cat] || '零食'}</span>
+      <span class="detail-info-pill">优选</span>
+      <span class="detail-info-pill">天然</span>
     </div>
     <div class="detail-stock ${soldOut ? 'out' : lowStock ? 'low' : ''}">
       <div class="stock-dot"></div>
-      <span>${soldOut ? 'Out of stock' : lowStock ? `Only ${product.stock} left!` : `${product.stock} in stock`}</span>
+      <span>${soldOut ? '已售罄' : lowStock ? `仅剩 ${product.stock} 件！` : `库存 ${product.stock} 件`}</span>
     </div>
   `;
 
@@ -228,7 +238,7 @@ function changeQty(delta) {
   const maxQty = currentDetailProduct.stock;
   const newQty = Math.max(1, Math.min(currentQty + delta, maxQty));
   if (newQty === currentQty) {
-    if (delta > 0) showToast(`Only ${maxQty} in stock`);
+    if (delta > 0) showToast(`库存仅剩 ${maxQty} 件`);
     return;
   }
   currentQty = newQty;
@@ -258,7 +268,7 @@ function addFromDetail() {
   detailAddBtn.style.background = '#34c759';
   setTimeout(() => { detailAddBtn.style.background = '#FFD60A'; }, 300);
 
-  showToast(`Added ${qtyToAdd} to cart`);
+  showToast(`已加入购物车 ${qtyToAdd} 件`);
 }
 
 /* ========================================
@@ -373,7 +383,7 @@ function addCartData(id, qty) {
 function updateCartBar() {
   const totalItems = cart.reduce((s, c) => s + c.qty, 0);
   cartBarBadge.textContent = totalItems;
-  cartBarSub.textContent = totalItems === 1 ? '1 item' : `${totalItems} items`;
+  cartBarSub.textContent = totalItems === 1 ? '1 件' : `${totalItems} 件`;
   cartBadgeTop.textContent = totalItems;
 
   if (totalItems > 0) {
@@ -400,8 +410,8 @@ function renderCartBody() {
   if (cart.length === 0) {
     cartBody.innerHTML = `
       <div style="text-align:center;padding:60px 0;color:#666">
-        <p style="font-size:16px;font-weight:600;color:#fff">Your cart is empty</p>
-        <p style="font-size:13px;color:#888;margin-top:8px">Add some snacks!</p>
+        <p style="font-size:16px;font-weight:600;color:#fff">购物车是空的</p>
+        <p style="font-size:13px;color:#888;margin-top:8px">去挑选些零食吧！</p>
       </div>
     `;
     return;
@@ -416,7 +426,7 @@ function renderCartBody() {
       </div>
       <div class="cart-item-info">
         <div class="cart-item-name">${c.name}</div>
-        <div class="cart-item-sub">${c.brand || ''} · Qty ${c.qty}</div>
+        <div class="cart-item-sub">${c.brand || ''} · 数量 ${c.qty}</div>
       </div>
       <div class="cart-item-price">$${String(c.price * c.qty).padStart(2, '0')}.00</div>
     </div>
@@ -427,12 +437,12 @@ function renderCartBody() {
   cartBody.innerHTML = `
     ${itemsHTML}
     <div class="cart-summary">
-      <div class="cart-summary-label">Delivery Amount</div>
-      <div class="cart-summary-total-label">Total Amount</div>
+      <div class="cart-summary-label">配送费</div>
+      <div class="cart-summary-total-label">合计</div>
       <div class="cart-summary-amount">USD $${String(total).padStart(2, '0')}.00</div>
     </div>
     <button class="checkout-btn" onclick="checkout()">
-      <span>Make Payment</span>
+      <span>立即支付</span>
       <div class="checkout-arrow">
         <svg width="16" height="16" viewBox="0 0 16 16"><path d="M4 8h7M8 5l3 3-3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       </div>
@@ -464,7 +474,7 @@ function saveOrder() {
    ======================================== */
 function checkout() {
   saveOrder();
-  showToast('Payment successful! 🎉');
+  showToast('支付成功！🎉');
   cart = [];
   saveCart();
   updateCartBar();
@@ -528,8 +538,8 @@ function renderManageList() {
   if (products.length === 0) {
     manageList.innerHTML = `
       <div style="text-align:center;padding:40px 0;color:#999">
-        <p style="font-size:14px">No products yet</p>
-        <p style="font-size:13px;margin-top:4px">Tap "Add New" to create one</p>
+        <p style="font-size:14px">暂无商品</p>
+        <p style="font-size:13px;margin-top:4px">点击"添加商品"创建第一个</p>
       </div>
     `;
     return;
@@ -550,15 +560,15 @@ function renderManageList() {
           <div class="manage-item-meta">
             <span class="manage-item-price">$${String(p.price).padStart(2, '0')}.00</span>
             <span class="manage-item-stock ${soldOut ? 'out' : lowStock ? 'low' : ''}">
-              ${soldOut ? 'Out of stock' : `${p.stock} in stock`}
+              ${soldOut ? '已售罄' : `库存 ${p.stock}`}
             </span>
           </div>
         </div>
         <div class="manage-item-actions">
-          <button class="manage-item-edit" onclick="editProduct(${p.id})" title="Edit">
+          <button class="manage-item-edit" onclick="editProduct(${p.id})" title="编辑">
             <svg width="16" height="16" viewBox="0 0 16 16"><path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           </button>
-          <button class="manage-item-delete" onclick="deleteProduct(${p.id})" title="Delete">
+          <button class="manage-item-delete" onclick="deleteProduct(${p.id})" title="删除">
             <svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 5h10M6 5V3h4v2M5 5l1 9h4l1-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
           </button>
         </div>
@@ -572,8 +582,8 @@ function showAddForm() {
   editingProductId = null;
   uploadedImage = null;
   selectedColor = '#FFF3D6';
-  formTitle.textContent = 'Add New Product';
-  formSaveBtn.textContent = 'Save Product';
+  formTitle.textContent = '添加新商品';
+  formSaveBtn.textContent = '保存商品';
   formName.value = '';
   formBrand.value = '';
   formPrice.value = '';
@@ -596,8 +606,8 @@ function editProduct(id) {
   uploadedImage = product.image || null;
   selectedColor = product.bg || '#FFF3D6';
 
-  formTitle.textContent = 'Edit Product';
-  formSaveBtn.textContent = 'Update Product';
+  formTitle.textContent = '编辑商品';
+  formSaveBtn.textContent = '更新商品';
   formName.value = product.name || '';
   formBrand.value = product.brand || '';
   formPrice.value = product.price || '';
@@ -631,7 +641,7 @@ imageInput.addEventListener('change', function(e) {
   if (!file) return;
 
   if (file.size > 2 * 1024 * 1024) {
-    showToast('Image too large (max 2MB)');
+    showToast('图片过大（最大 2MB）');
     return;
   }
 
@@ -663,12 +673,12 @@ function saveProduct() {
   const category = formCategory.value;
 
   if (!name) {
-    showToast('Please enter a product name');
+    showToast('请输入商品名称');
     formName.focus();
     return;
   }
   if (isNaN(price) || price < 0) {
-    showToast('Please enter a valid price');
+    showToast('请输入有效价格');
     formPrice.focus();
     return;
   }
@@ -692,7 +702,7 @@ function saveProduct() {
         product.bagText = (brand || name).toUpperCase().substring(0, 10);
         product.bagSub = category;
       }
-      showToast('Product updated!');
+      showToast('商品已更新！');
     }
   } else {
     /* 新增商品 */
@@ -710,7 +720,7 @@ function saveProduct() {
       bagSub: uploadedImage ? null : category,
     };
     products.push(newProduct);
-    showToast('Product added!');
+    showToast('商品已添加！');
   }
 
   saveProducts();
@@ -728,7 +738,7 @@ function deleteProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
 
-  if (!confirm(`Delete "${product.name}"?`)) return;
+  if (!confirm(`确认删除"${product.name}"？`)) return;
 
   products = products.filter(p => p.id !== id);
   /* 从购物车也移除 */
@@ -739,7 +749,7 @@ function deleteProduct(id) {
   renderManageList();
   renderProductGrid();
   updateCartBar();
-  showToast('Product deleted');
+  showToast('商品已删除');
 }
 
 /* 根据分类生成包装袋颜色 */
