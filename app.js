@@ -441,9 +441,29 @@ function renderCartBody() {
 }
 
 /* ========================================
+   订单管理
+   ======================================== */
+const ORDERS_KEY = 'universal_id_orders';
+
+function saveOrder() {
+  const saved = localStorage.getItem(ORDERS_KEY);
+  const orders = saved ? JSON.parse(saved) : [];
+  const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
+  orders.push({
+    id: 'ORD-' + Date.now(),
+    items: cart.map(c => ({ name: c.name, brand: c.brand, price: c.price, qty: c.qty, image: c.image })),
+    total: total,
+    status: 'pending',
+    timestamp: new Date().toISOString(),
+  });
+  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
+}
+
+/* ========================================
    结算
    ======================================== */
 function checkout() {
+  saveOrder();
   showToast('Payment successful! 🎉');
   cart = [];
   saveCart();
