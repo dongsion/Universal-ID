@@ -1,6 +1,6 @@
-# Universal ID - Snacks Store
+# Universal ID - Snacks Store (Customer App)
 
-A snack e-commerce mobile app prototype with "addictive" add-to-cart animations and full product management.
+A snack e-commerce mobile app with "addictive" add-to-cart animations and built-in product management.
 
 ## Features
 
@@ -16,7 +16,7 @@ A snack e-commerce mobile app prototype with "addictive" add-to-cart animations 
 4. **Thumbnail Slide-in** - New thumbnails slide into the cart bar with spring physics
 5. **Cart Page Reveal** - Dark container slides up with curve animation and staggered list items
 
-### Product Management
+### Product Management (In-App)
 - **Add Products** - Upload custom images, set name/brand/price/stock/category
 - **Edit Products** - Modify any product field at any time
 - **Delete Products** - Remove products from store (also removes from cart)
@@ -28,6 +28,9 @@ A snack e-commerce mobile app prototype with "addictive" add-to-cart animations 
 - localStorage for data persistence
 - CSS animations + requestAnimationFrame for motion
 - Base64 image encoding for uploaded product images
+
+## Related
+- Merchant Dashboard: [Universal-ID-Admin](https://github.com/dongsion/Universal-ID-Admin)
 
 ## Usage
 1. Open `index.html` in a browser (or serve with any static server)
