@@ -1,7 +1,11 @@
 /* ========================================
-   Universal ID - 零食铺子
-   完整版：含商品管理（增删改查）+ 库存管理 + localStorage 持久化
+   Universal ID - 零食铺子（客户端）
+   后端版：API + WebSocket 实时同步
    ======================================== */
+
+/* ---- 服务器地址（改成你的服务器IP） ---- */
+const API_BASE = 'http://43.139.32.212:3210/api/uid';
+const WS_URL = 'ws://43.139.32.212:3210/ws';
 
 /* ---- 分类映射 ---- */
 const CATEGORY_NAMES = {
@@ -13,18 +17,6 @@ const CATEGORY_NAMES = {
   'Nuts': '坚果',
 };
 
-/* ---- 默认商品数据 ---- */
-const DEFAULT_PRODUCTS = [
-  { id: 1, name: '史密斯薯片',     brand: 'Smiths',      price: 7,  stock: 50,  bg: '#FFF3D6', bagBg: '#E8650C', bagText: 'SMITHS',     bagSub: '原味',     cat: 'Chips',  image: null },
-  { id: 2, name: '椰子脆片',       brand: 'Dang',        price: 6,  stock: 80,  bg: '#D6F5E0', bagBg: '#1A8A4E', bagText: 'dang',        bagSub: '椰子味',   cat: 'Chips',  image: null },
-  { id: 3, name: '黑金薯片',       brand: 'Idaho',       price: 8,  stock: 30,  bg: '#F5D6E0', bagBg: '#2A2A2A', bagText: 'IDAHO',       bagSub: '黑椒味',   cat: 'Chips',  image: null },
-  { id: 4, name: '天然波浪薯片',   brand: 'Ruffles',     price: 8,  stock: 60,  bg: '#D6E8F5', bagBg: '#1A5B9E', bagText: 'RUFFLES',     bagSub: '原味',     cat: 'Chips',  image: null },
-  { id: 5, name: '卷卷薯片',       brand: 'Twistos',     price: 6,  stock: 0,   bg: '#F5D6D6', bagBg: '#C01A1A', bagText: 'TWISTOS',     bagSub: '烧烤味',   cat: 'Chips',  image: null },
-  { id: 6, name: '深河海盐薯片',   brand: 'Deep River',  price: 9,  stock: 25,  bg: '#E0D6F5', bagBg: '#5B1A8A', bagText: 'DEEP RIVER',  bagSub: '海盐味',   cat: 'Chips',  image: null },
-  { id: 7, name: '梦境松露',       brand: 'Unreal',      price: 6,  stock: 40,  bg: '#D6F5E8', bagBg: '#1A8A6E', bagText: 'UNREAL',      bagSub: '可可味',   cat: 'Choco',  image: null },
-  { id: 8, name: '完美零食',       brand: 'Perfect',     price: 8,  stock: 35,  bg: '#F5E8D6', bagBg: '#5B3A1A', bagText: 'PERFECT',     bagSub: '黑巧味',   cat: 'Choco',  image: null },
-];
-
 /* ---- 状态 ---- */
 let products = [];
 let cart = [];
@@ -35,36 +27,13 @@ let uploadedImage = null;
 let selectedColor = '#FFF3D6';
 let currentFilter = 'All';
 
-/* ---- localStorage 持久化 ---- */
-const STORAGE_KEY = 'universal_id_products';
+/* ---- 购物车仍用 localStorage（临时购物车，不需要跨设备） ---- */
 const CART_KEY = 'universal_id_cart';
-
-function loadProducts() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      products = JSON.parse(saved);
-    } catch (e) {
-      products = [...DEFAULT_PRODUCTS];
-    }
-  } else {
-    products = [...DEFAULT_PRODUCTS];
-    saveProducts();
-  }
-}
-
-function saveProducts() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-}
 
 function loadCart() {
   const saved = localStorage.getItem(CART_KEY);
   if (saved) {
-    try {
-      cart = JSON.parse(saved);
-    } catch (e) {
-      cart = [];
-    }
+    try { cart = JSON.parse(saved); } catch (e) { cart = []; }
   }
 }
 
@@ -72,8 +41,85 @@ function saveCart() {
   localStorage.setItem(CART_KEY, JSON.stringify(cart));
 }
 
-function getNextId() {
-  return products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
+/* ---- API 请求封装 ---- */
+async function api(path, options = {}) {
+  try {
+    const res = await fetch(API_BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || '请求失败');
+    }
+    return await res.json();
+  } catch (e) {
+    console.error('API错误:', e);
+    showToast('网络错误，请稍后重试');
+    return null;
+  }
+}
+
+/* ---- 从服务器加载商品 ---- */
+async function loadProducts() {
+  const data = await api('/products');
+  if (data) {
+    products = data;
+    renderProductGrid();
+    if (manageOverlay.classList.contains('active')) renderManageList();
+  }
+}
+
+/* ---- WebSocket 实时更新 ---- */
+let ws = null;
+let wsReconnectTimer = null;
+
+function connectWS() {
+  try {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      console.log('WebSocket 已连接');
+    };
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      handleWSMessage(msg);
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket 断开，5秒后重连');
+      wsReconnectTimer = setTimeout(connectWS, 5000);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  } catch (e) {
+    console.error('WebSocket 连接失败:', e);
+  }
+}
+
+function handleWSMessage(msg) {
+  const { type, data } = msg;
+
+  if (type === 'product_updated' || type === 'product_added') {
+    const idx = products.findIndex(p => p.id === data.id);
+    if (idx >= 0) {
+      products[idx] = data;
+    } else {
+      products.push(data);
+    }
+    renderProductGrid();
+    if (manageOverlay.classList.contains('active')) renderManageList();
+  } else if (type === 'product_deleted') {
+    products = products.filter(p => p.id !== data.id);
+    cart = cart.filter(c => c.id !== data.id);
+    saveCart();
+    renderProductGrid();
+    updateCartBar();
+    if (manageOverlay.classList.contains('active')) renderManageList();
+  }
 }
 
 /* ---- DOM 引用 ---- */
@@ -116,7 +162,7 @@ const colorPicker = document.getElementById('color-picker');
 const formSaveBtn = document.getElementById('form-save-btn');
 
 /* ========================================
-   生成商品图 HTML（支持上传图片或 CSS 包装袋）
+   生成商品图 HTML
    ======================================== */
 function productImageHTML(product) {
   if (product.image) {
@@ -261,9 +307,14 @@ function addFromDetail() {
   flyToCart(detailAddBtn, currentDetailProduct);
   addCartData(currentDetailProduct.id, qtyToAdd);
 
-  // 扣减库存
+  // 通知服务器扣减库存
+  api(`/products/${currentDetailProduct.id}/stock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stock: -qtyToAdd })
+  });
+
+  // 本地先扣减
   currentDetailProduct.stock -= qtyToAdd;
-  saveProducts();
 
   detailAddBtn.style.background = '#34c759';
   setTimeout(() => { detailAddBtn.style.background = '#FFD60A'; }, 300);
@@ -281,9 +332,14 @@ function addToCart(id, btnEl) {
   flyToCart(btnEl, product);
   addCartData(id, 1);
 
-  // 扣减库存
+  // 通知服务器扣减库存
+  api(`/products/${id}/stock`, {
+    method: 'PATCH',
+    body: JSON.stringify({ stock: -1 })
+  });
+
+  // 本地先扣减
   product.stock -= 1;
-  saveProducts();
 
   // 按钮反馈
   btnEl.classList.add('success');
@@ -295,7 +351,6 @@ function addToCart(id, btnEl) {
     svg.innerHTML = origHTML;
   }, 600);
 
-  // 如果库存变0或低，刷新网格
   if (product.stock <= 0 || product.stock <= 10) {
     setTimeout(() => renderProductGrid(), 650);
   }
@@ -451,35 +506,34 @@ function renderCartBody() {
 }
 
 /* ========================================
-   订单管理
+   结算 - 发送订单到服务器
    ======================================== */
-const ORDERS_KEY = 'universal_id_orders';
-
-function saveOrder() {
-  const saved = localStorage.getItem(ORDERS_KEY);
-  const orders = saved ? JSON.parse(saved) : [];
+async function checkout() {
   const total = cart.reduce((s, c) => s + c.price * c.qty, 0);
-  orders.push({
-    id: 'ORD-' + Date.now(),
-    items: cart.map(c => ({ name: c.name, brand: c.brand, price: c.price, qty: c.qty, image: c.image })),
-    total: total,
-    status: 'pending',
-    timestamp: new Date().toISOString(),
-  });
-  localStorage.setItem(ORDERS_KEY, JSON.stringify(orders));
-}
+  const items = cart.map(c => ({
+    id: c.id,
+    name: c.name,
+    brand: c.brand,
+    price: c.price,
+    qty: c.qty,
+    image: c.image
+  }));
 
-/* ========================================
-   结算
-   ======================================== */
-function checkout() {
-  saveOrder();
-  showToast('支付成功！🎉');
-  cart = [];
-  saveCart();
-  updateCartBar();
-  cartBar.classList.add('hidden');
-  setTimeout(() => showPage('browse'), 500);
+  showToast('正在提交订单...');
+
+  const order = await api('/orders', {
+    method: 'POST',
+    body: JSON.stringify({ items, total })
+  });
+
+  if (order) {
+    showToast('支付成功！🎉');
+    cart = [];
+    saveCart();
+    updateCartBar();
+    cartBar.classList.add('hidden');
+    setTimeout(() => showPage('browse'), 500);
+  }
 }
 
 /* ========================================
@@ -516,22 +570,19 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
 });
 
 /* ========================================
-   ===== 商品管理功能 =====
+   ===== 商品管理功能（调用后端 API） =====
    ======================================== */
 
-/* 打开管理面板 */
 function openManagePanel() {
   manageOverlay.classList.add('active');
   hideAddForm();
   renderManageList();
 }
 
-/* 关闭管理面板 */
 function closeManagePanel() {
   manageOverlay.classList.remove('active');
 }
 
-/* 渲染管理列表 */
 function renderManageList() {
   manageCount.textContent = products.length;
 
@@ -551,9 +602,7 @@ function renderManageList() {
     return `
       <div class="manage-item">
         <div class="manage-item-img" style="background:${p.bg || '#f0f0f3'}">
-          ${p.image
-            ? `<img src="${p.image}">`
-            : productImageHTML(p)}
+          ${p.image ? `<img src="${p.image}">` : productImageHTML(p)}
         </div>
         <div class="manage-item-info">
           <div class="manage-item-name">${p.name}</div>
@@ -577,7 +626,6 @@ function renderManageList() {
   }).join('');
 }
 
-/* 显示添加表单 */
 function showAddForm() {
   editingProductId = null;
   uploadedImage = null;
@@ -597,7 +645,6 @@ function showAddForm() {
   manageFormSection.style.display = 'block';
 }
 
-/* 显示编辑表单 */
 function editProduct(id) {
   const product = products.find(p => p.id === id);
   if (!product) return;
@@ -630,21 +677,17 @@ function editProduct(id) {
   manageFormSection.style.display = 'block';
 }
 
-/* 隐藏添加表单 */
 function hideAddForm() {
   manageFormSection.style.display = 'none';
 }
 
-/* 图片上传处理 */
 imageInput.addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
-
   if (file.size > 2 * 1024 * 1024) {
     showToast('图片过大（最大 2MB）');
     return;
   }
-
   const reader = new FileReader();
   reader.onload = function(event) {
     uploadedImage = event.target.result;
@@ -655,7 +698,6 @@ imageInput.addEventListener('change', function(e) {
   reader.readAsDataURL(file);
 });
 
-/* 颜色选择器 */
 colorPicker.addEventListener('click', function(e) {
   const option = e.target.closest('.color-option');
   if (!option) return;
@@ -664,102 +706,73 @@ colorPicker.addEventListener('click', function(e) {
   selectedColor = option.dataset.color;
 });
 
-/* 保存商品（添加或编辑） */
-function saveProduct() {
+/* 保存商品 - 调用后端 API */
+async function saveProduct() {
   const name = formName.value.trim();
   const brand = formBrand.value.trim();
   const price = parseFloat(formPrice.value);
   const stock = parseInt(formStock.value) || 0;
   const category = formCategory.value;
 
-  if (!name) {
-    showToast('请输入商品名称');
-    formName.focus();
-    return;
-  }
-  if (isNaN(price) || price < 0) {
-    showToast('请输入有效价格');
-    formPrice.focus();
-    return;
-  }
+  if (!name) { showToast('请输入商品名称'); formName.focus(); return; }
+  if (isNaN(price) || price < 0) { showToast('请输入有效价格'); formPrice.focus(); return; }
+
+  const payload = {
+    name, brand, price, stock, cat: category, bg: selectedColor,
+    image: uploadedImage,
+    bagBg: uploadedImage ? null : generateBagColor(category),
+    bagText: uploadedImage ? null : (brand || name).toUpperCase().substring(0, 10),
+    bagSub: uploadedImage ? null : category,
+  };
 
   if (editingProductId !== null) {
-    /* 编辑现有商品 */
-    const product = products.find(p => p.id === editingProductId);
-    if (product) {
-      product.name = name;
-      product.brand = brand;
-      product.price = price;
-      product.stock = stock;
-      product.cat = category;
-      product.bg = selectedColor;
-      if (uploadedImage !== null) {
-        product.image = uploadedImage;
-      }
-      /* 如果没有自定义图，生成包装袋颜色 */
-      if (!uploadedImage && !product.bagBg) {
-        product.bagBg = generateBagColor(category);
-        product.bagText = (brand || name).toUpperCase().substring(0, 10);
-        product.bagSub = category;
-      }
+    const updated = await api(`/products/${editingProductId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    if (updated) {
+      const idx = products.findIndex(p => p.id === editingProductId);
+      if (idx >= 0) products[idx] = updated;
       showToast('商品已更新！');
     }
   } else {
-    /* 新增商品 */
-    const newProduct = {
-      id: getNextId(),
-      name: name,
-      brand: brand,
-      price: price,
-      stock: stock,
-      bg: selectedColor,
-      cat: category,
-      image: uploadedImage,
-      bagBg: uploadedImage ? null : generateBagColor(category),
-      bagText: uploadedImage ? null : (brand || name).toUpperCase().substring(0, 10),
-      bagSub: uploadedImage ? null : category,
-    };
-    products.push(newProduct);
-    showToast('商品已添加！');
+    const newProduct = await api('/products', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    if (newProduct) {
+      products.push(newProduct);
+      showToast('商品已添加！');
+    }
   }
 
-  saveProducts();
   renderManageList();
   hideAddForm();
+  renderProductGrid();
+}
 
-  /* 如果浏览页可见，刷新网格 */
-  if (!pageDetail.classList.contains('detail-active') && !pageCart.classList.contains('cart-active')) {
+/* 删除商品 - 调用后端 API */
+async function deleteProduct(id) {
+  const product = products.find(p => p.id === id);
+  if (!product) return;
+  if (!confirm(`确认删除"${product.name}"？`)) return;
+
+  const result = await api(`/products/${id}`, { method: 'DELETE' });
+  if (result) {
+    products = products.filter(p => p.id !== id);
+    cart = cart.filter(c => c.id !== id);
+    saveCart();
+    renderManageList();
     renderProductGrid();
+    updateCartBar();
+    showToast('商品已删除');
   }
 }
 
-/* 删除商品 */
-function deleteProduct(id) {
-  const product = products.find(p => p.id === id);
-  if (!product) return;
-
-  if (!confirm(`确认删除"${product.name}"？`)) return;
-
-  products = products.filter(p => p.id !== id);
-  /* 从购物车也移除 */
-  cart = cart.filter(c => c.id !== id);
-
-  saveProducts();
-  saveCart();
-  renderManageList();
-  renderProductGrid();
-  updateCartBar();
-  showToast('商品已删除');
-}
-
-/* 根据分类生成包装袋颜色 */
 function generateBagColor(category) {
   const colors = {
-    'Chips':   '#E8650C',
-    'Choco':   '#5B3A1A',
-    'Drinks':  '#1A5B9E',
-    'Cookies': '#C01A1A',
-    'Nuts':    '#1A8A4E',
+    'Chips': '#E8650C', 'Choco': '#5B3A1A', 'Drinks': '#1A5B9E',
+    'Cookies': '#C01A1A', 'Nuts': '#1A8A4E',
   };
   return colors[category] || '#666';
 }
@@ -772,15 +785,14 @@ function showToast(message) {
   toast.textContent = message;
   toast.classList.add('show');
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-  }, 2000);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 2000);
 }
 
 /* ========================================
    初始化
    ======================================== */
-loadProducts();
 loadCart();
 renderProductGrid();
 updateCartBar();
+loadProducts();
+connectWS();
