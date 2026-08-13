@@ -23,6 +23,13 @@ A snack e-commerce mobile app with "addictive" add-to-cart animations and built-
 - **Stock Management** - Real-time stock decrement on add-to-cart, low-stock warnings, sold-out states
 - **Data Persistence** - All data saved to localStorage (survives page refresh)
 
+### Real-time Chat (New)
+- **Customer Chat** - Floating chat button opens a conversation panel with the merchant
+- **Real-time Messaging** - WebSocket-powered instant message delivery
+- **Unread Badge** - Red badge on chat button shows unread message count
+- **Message History** - Chat history persisted in localStorage
+- **Smart Positioning** - Chat button automatically adjusts position to avoid the cart bar
+
 ## Tech Stack
 - Pure HTML / CSS / JavaScript (no frameworks)
 - localStorage for data persistence
